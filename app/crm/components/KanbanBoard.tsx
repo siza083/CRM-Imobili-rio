@@ -49,18 +49,18 @@ export function KanbanBoard({ initialLeads }: Props) {
         { event: 'INSERT', schema: 'public', table: 'leads' },
         (payload) => {
           const novoLead = payload.new as Lead
-          // Adiciona ao estado
           setLeads(prev => {
             if (prev.find(l => l.id === novoLead.id)) return prev
             return [novoLead, ...prev]
           })
-          // Exibe notificação
           setNotificacoes(prev => [...prev, { id: novoLead.id, nome: novoLead.nome }])
-          // Remove notificação automaticamente após 6s
           setTimeout(() => dismissNotificacao(novoLead.id), 6000)
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (err) console.error('[Realtime] erro na subscrição:', err)
+        else console.log('[Realtime] status:', status)
+      })
 
     return () => {
       supabase.removeChannel(channel)
