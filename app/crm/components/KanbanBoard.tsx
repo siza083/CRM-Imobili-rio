@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { KanbanCard, type Lead } from './KanbanCard'
+import { logout } from '@/app/login/actions'
 
 type Column = {
   id: Lead['status']
@@ -64,13 +65,23 @@ export function KanbanBoard({ initialLeads }: Props) {
             <h1 className="text-xl font-bold text-gray-900">CRM Imobiliário</h1>
             <p className="text-sm text-gray-500">{leads.length} lead{leads.length !== 1 ? 's' : ''} no total</p>
           </div>
-          <input
-            type="text"
-            placeholder="Buscar por nome, telefone ou email..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Buscar por nome, telefone ou email..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <form action={logout}>
+              <button
+                type="submit"
+                className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Sair
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 
