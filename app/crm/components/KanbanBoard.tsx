@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import { KanbanCard, type Lead } from './KanbanCard'
 import { logout } from '@/app/login/actions'
 
@@ -12,21 +13,62 @@ type Column = {
 }
 
 const COLUMNS: Column[] = [
-  { id: 'novo',       label: 'Novo',        color: 'bg-blue-50 border-blue-200',   dot: 'bg-blue-500' },
-  { id: 'em_contato', label: 'Em contato',  color: 'bg-yellow-50 border-yellow-200', dot: 'bg-yellow-500' },
-  { id: 'qualificado',label: 'Qualificado', color: 'bg-purple-50 border-purple-200', dot: 'bg-purple-500' },
-  { id: 'convertido', label: 'Convertido',  color: 'bg-green-50 border-green-200',  dot: 'bg-green-500' },
-  { id: 'descartado', label: 'Descartado',  color: 'bg-gray-50 border-gray-200',    dot: 'bg-gray-400' },
+  { id: 'novo',        label: 'Novo',        color: 'bg-blue-50 border-blue-200',     dot: 'bg-blue-500' },
+  { id: 'em_contato',  label: 'Em contato',  color: 'bg-yellow-50 border-yellow-200', dot: 'bg-yellow-500' },
+  { id: 'qualificado', label: 'Qualificado', color: 'bg-purple-50 border-purple-200', dot: 'bg-purple-500' },
+  { id: 'convertido',  label: 'Convertido',  color: 'bg-green-50 border-green-200',   dot: 'bg-green-500' },
+  { id: 'descartado',  label: 'Descartado',  color: 'bg-gray-50 border-gray-200',     dot: 'bg-gray-400' },
 ]
 
 type Props = {
   initialLeads: Lead[]
 }
 
+type Notificacao = {
+  id: string
+  nome: string | null
+}
+
 export function KanbanBoard({ initialLeads }: Props) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
   const [search, setSearch] = useState('')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([])
+
+  const dismissNotificacao = useCallback((id: string) => {
+    setNotificacoes(prev => prev.filter(n => n.id !== id))
+  }, [])
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const channel = supabase
+      .channel('leads-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'leads' },
+        (payload) => {
+          const novoLead = payload.new as Lead
+          // Adiciona ao estado
+          setLeads(prev => {
+            if (prev.find(l => l.id === novoLead.id)) return prev
+            return [novoLead, ...prev]
+          })
+          // Exibe notificação
+          setNotificacoes(prev => [...prev, { id: novoLead.id, nome: novoLead.nome }])
+          // Remove notificação automaticamente após 6s
+          setTimeout(() => dismissNotificacao(novoLead.id), 6000)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [dismissNotificacao])
 
   const filtered = leads.filter(lead => {
     const q = search.toLowerCase()
@@ -58,6 +100,28 @@ export function KanbanBoard({ initialLeads }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-100">
+
+      {/* Notificações de novos leads */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        {notificacoes.map(n => (
+          <div
+            key={n.id}
+            className="flex items-center gap-3 bg-white border border-green-200 shadow-lg rounded-xl px-4 py-3 text-sm animate-pulse"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" />
+            <span className="text-gray-800 font-medium">
+              Novo lead: <span className="text-green-700">{n.nome ?? 'Sem nome'}</span>
+            </span>
+            <button
+              onClick={() => dismissNotificacao(n.id)}
+              className="ml-2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4 flex-wrap">
@@ -92,7 +156,6 @@ export function KanbanBoard({ initialLeads }: Props) {
             const colLeads = filtered.filter(l => l.status === col.id)
             return (
               <div key={col.id} className={`rounded-xl border ${col.color} p-3 flex flex-col gap-2 min-h-[200px]`}>
-                {/* Cabeçalho da coluna */}
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
                   <span className="text-sm font-semibold text-gray-700">{col.label}</span>
@@ -101,7 +164,6 @@ export function KanbanBoard({ initialLeads }: Props) {
                   </span>
                 </div>
 
-                {/* Cards */}
                 {colLeads.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center mt-4">Nenhum lead</p>
                 ) : (
