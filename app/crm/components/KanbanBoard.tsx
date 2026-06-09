@@ -40,31 +40,34 @@ export function KanbanBoard({ initialLeads }: Props) {
   }, [])
 
   useEffect(() => {
-    const supabase = createClient()
+    const INTERVALO_MS = 30000 // 30 segundos
 
-    const channel = supabase
-      .channel('leads-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'leads' },
-        (payload) => {
-          const novoLead = payload.new as Lead
-          setLeads(prev => {
-            if (prev.find(l => l.id === novoLead.id)) return prev
-            return [novoLead, ...prev]
+    const verificarNovosLeads = async () => {
+      try {
+        const res = await fetch('/api/leads/recentes')
+        if (!res.ok) return
+        const { leads: recentes } = await res.json() as { leads: Lead[] }
+
+        setLeads(prev => {
+          const idsExistentes = new Set(prev.map(l => l.id))
+          const novos = recentes.filter(l => !idsExistentes.has(l.id))
+          if (novos.length === 0) return prev
+
+          // Dispara notificação para cada novo lead
+          novos.forEach(lead => {
+            setNotificacoes(n => [...n, { id: lead.id, nome: lead.nome }])
+            setTimeout(() => dismissNotificacao(lead.id), 6000)
           })
-          setNotificacoes(prev => [...prev, { id: novoLead.id, nome: novoLead.nome }])
-          setTimeout(() => dismissNotificacao(novoLead.id), 6000)
-        }
-      )
-      .subscribe((status, err) => {
-        if (err) console.error('[Realtime] erro na subscrição:', err)
-        else console.log('[Realtime] status:', status)
-      })
 
-    return () => {
-      supabase.removeChannel(channel)
+          return [...novos, ...prev]
+        })
+      } catch {
+        // silencioso — não interrompe o usuário
+      }
     }
+
+    const intervalo = setInterval(verificarNovosLeads, INTERVALO_MS)
+    return () => clearInterval(intervalo)
   }, [dismissNotificacao])
 
   const filtered = leads.filter(lead => {
