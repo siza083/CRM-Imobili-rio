@@ -25,14 +25,32 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — mantém o token de autenticação atualizado
-  await supabase.auth.getUser()
+  // Atualiza a sessão do usuário
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { pathname } = request.nextUrl
+
+  // Rotas protegidas — exigem autenticação
+  if (pathname.startsWith('/crm')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Se já estiver logado e tentar acessar /login, redireciona para /crm
+  if (pathname === '/login' && user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/crm'
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
